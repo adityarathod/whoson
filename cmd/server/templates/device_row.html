@@ -1,0 +1,41 @@
+{{define "device-card"}}
+{{- $connClass := "wired" -}}
+{{- $connLabel := "Ethernet" -}}
+{{- if eq .Connectivity "wlan-24"}}{{$connClass = "wlan24"}}{{$connLabel = "2.4 GHz"}}{{end -}}
+{{- if eq .Connectivity "wlan-5"}}{{$connClass = "wlan5"}}{{$connLabel = "5 GHz"}}{{end -}}
+{{- $stateClass := "dc-offline" -}}
+{{- if .Online}}{{$stateClass = "dc-online"}}{{end -}}
+<div class="device-card {{$stateClass}}{{if .Blocked}} dc-blocked{{end}}">
+  <div class="card-stripe"></div>
+  <div class="card-body">
+    <div class="card-top">
+      <span class="status-pill">
+        <span class="status-dot"></span>
+        {{if .Online}}Online{{else}}Offline{{end}}
+      </span>
+      <div class="card-badges">
+        {{- if .Blocked}}<span class="badge badge-blocked">Blocked</span>{{end}}
+        <span class="badge badge-{{$connClass}}">{{$connLabel}}</span>
+      </div>
+    </div>
+    <div class="device-name">{{if .Name}}{{.Name}}{{else}}{{.MAC}}{{end}}</div>
+    {{if .Vendor}}<div class="device-vendor">{{.Vendor}}</div>{{end}}
+    <div class="card-addrs">
+      <span>{{.MAC}}</span>
+      <span class="addr-dot">·</span>
+      <span>{{.IP}}</span>
+      {{- if and .Online (ne .Connectivity "wired")}}
+      <span class="addr-dot">·</span>
+      <span>{{.RSSI}} dBm</span>
+      {{- end}}
+    </div>
+  </div>
+  <div class="card-footer">
+    {{- if .Blocked}}
+    <button class="btn-unblock" data-mac="{{.MAC}}" data-name="{{if .Name}}{{.Name}}{{else}}{{.MAC}}{{end}}" data-op="unblock">Unblock</button>
+    {{- else}}
+    <button class="btn-block" data-mac="{{.MAC}}" data-name="{{if .Name}}{{.Name}}{{else}}{{.MAC}}{{end}}" data-op="block">Block</button>
+    {{- end}}
+  </div>
+</div>
+{{end}}

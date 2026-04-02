@@ -1,0 +1,293 @@
+{{template "base" .}}
+
+{{define "title"}}who's on{{end}}
+
+{{define "body"}}
+<nav class="navbar">
+  <span class="brand">who's on</span>
+  <div class="nav-divider"></div>
+  <span class="nav-stat"><strong id="nav-online">{{.Online}}</strong> online &nbsp;·&nbsp; <strong id="nav-total">{{.Total}}</strong> total</span>
+  <div class="nav-right">
+    <button class="btn-ghost" id="display-mode-btn" onclick="toggleDisplayMode()">Display Mode</button>
+    <button class="btn-ghost" id="refresh-btn" onclick="load()">↻ Refresh</button>
+  </div>
+</nav>
+
+<div class="content">
+  <div id="error"></div>
+
+  <div class="stats-row">
+    <div class="stat-card s-total">
+      <div class="stat-label">Total</div>
+      <div class="stat-value" id="stat-total">{{.Total}}</div>
+    </div>
+    <div class="stat-card s-online">
+      <div class="stat-label">Online</div>
+      <div class="stat-value" id="stat-online">{{.Online}}</div>
+    </div>
+    <div class="stat-card s-offline">
+      <div class="stat-label">Offline</div>
+      <div class="stat-value" id="stat-offline">{{.Offline}}</div>
+    </div>
+    <div class="stat-card s-blocked">
+      <div class="stat-label">Blocked</div>
+      <div class="stat-value" id="stat-blocked">{{.Blocked}}</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="online">Online</button>
+    <button class="filter-btn" data-filter="offline">Offline</button>
+    <button class="filter-btn" data-filter="blocked">Blocked</button>
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input class="search-input" id="search" type="search" placeholder="Search devices…" oninput="render()" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="device-grid" id="grid">
+    {{range .Devices}}{{template "device-card" .}}{{end}}
+  </div>
+</div>
+
+<script>
+let devices = {{.DevicesJSON}};
+let activeFilter = 'all';
+let privacyMode = false;
+
+// ── Filter buttons ────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    render();
+  });
+});
+
+// ── Loader ────────────────────────────────────────────────
+function setLoader(on) {
+  document.getElementById('loader').classList.toggle('active', on);
+}
+
+// ── Error ─────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('error').style.display = 'none';
+}
+
+// ── Stats ─────────────────────────────────────────────────
+function updateStats() {
+  const online  = devices.filter(d => d.online).length;
+  const blocked = devices.filter(d => d.blocked).length;
+  document.getElementById('stat-total').textContent   = devices.length;
+  document.getElementById('stat-online').textContent  = online;
+  document.getElementById('stat-offline').textContent = devices.length - online;
+  document.getElementById('stat-blocked').textContent = blocked;
+  document.getElementById('nav-online').textContent   = online;
+  document.getElementById('nav-total').textContent    = devices.length;
+}
+
+// ── Refresh ───────────────────────────────────────────────
+async function load() {
+  setLoader(true);
+  document.getElementById('refresh-btn').disabled = true;
+  try {
+    const res = await fetch('/api/devices');
+    if (!res.ok) throw new Error(await res.text());
+    devices = await res.json();
+    render();
+    hideError();
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    setLoader(false);
+    document.getElementById('refresh-btn').disabled = false;
+  }
+}
+
+// ── Display mode ──────────────────────────────────────────
+function toggleDisplayMode() {
+  privacyMode = !privacyMode;
+  document.getElementById('display-mode-btn').classList.toggle('btn-on', privacyMode);
+  render();
+}
+
+function blur(s) {
+  return `<span class="redacted">${s}</span>`;
+}
+
+function redact(s) {
+  if (!s) return s;
+  return esc(s.slice(0, 2)) + blur('X'.repeat(Math.max(0, s.length - 2)));
+}
+
+function maskMAC(mac) {
+  const parts = (mac || '').split(':');
+  if (parts.length !== 6) return blur('XX:XX:XX:XX:XX:XX');
+  return blur(parts.map(() => 'XX').join(':'));
+}
+
+function maskIP(ip) {
+  const parts = (ip || '').split('.');
+  if (parts.length !== 4) return ip;
+  return parts[0] + '.' + parts[1] + '.'
+    + blur('X'.repeat(parts[2].length)) + '.'
+    + blur('X'.repeat(parts[3].length));
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function connInfo(c) {
+  if (c === 'wlan-24') return { cls: 'wlan24', label: '2.4 GHz' };
+  if (c === 'wlan-5')  return { cls: 'wlan5',  label: '5 GHz' };
+  return { cls: 'wired', label: 'Ethernet' };
+}
+
+function sigBars(rssiStr) {
+  const v = parseInt(rssiStr);
+  if (isNaN(v)) return '';
+  let level = 1;
+  if (v >= -55) level = 4;
+  else if (v >= -65) level = 3;
+  else if (v >= -75) level = 2;
+  return '<span class="sig">' +
+    [1,2,3,4].map(i => `<span class="sig-bar${i <= level ? ' lit' : ''}"></span>`).join('') +
+    '</span>';
+}
+
+function sortDevices(arr) {
+  return [...arr].sort((a, b) => {
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    const na = (a.name || a.mac).toLowerCase();
+    const nb = (b.name || b.mac).toLowerCase();
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+}
+
+// ── Render ────────────────────────────────────────────────
+function visibleDevices() {
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  return sortDevices(devices).filter(d => {
+    if (activeFilter === 'online'  && !d.online)   return false;
+    if (activeFilter === 'offline' && d.online)    return false;
+    if (activeFilter === 'blocked' && !d.blocked)  return false;
+    if (!q) return true;
+    return (d.name || '').toLowerCase().includes(q) ||
+           (d.mac  || '').toLowerCase().includes(q) ||
+           (d.ip   || '').toLowerCase().includes(q) ||
+           (d.vendor|| '').toLowerCase().includes(q);
+  });
+}
+
+function renderCard(d) {
+  const stateClass  = d.online ? 'dc-online' : 'dc-offline';
+  const blockedClass = d.blocked  ? ' dc-blocked'  : '';
+  const pendingClass = d._pending ? ' dc-pending'  : '';
+  const conn = connInfo(d.connectivity);
+
+  const blockedBadge = d.blocked
+    ? '<span class="badge badge-blocked">Blocked</span>'
+    : '';
+  const connBadge = `<span class="badge badge-${conn.cls}">${conn.label}</span>`;
+
+  const name   = privacyMode ? redact(d.name || d.mac) : esc(d.name || d.mac);
+  const vendor = d.vendor
+    ? `<div class="device-vendor">${privacyMode ? redact(d.vendor) : esc(d.vendor)}</div>`
+    : '';
+  const mac    = privacyMode ? maskMAC(d.mac) : esc(d.mac);
+
+  const rssiPart = (d.online && d.connectivity !== 'wired')
+    ? `<span class="addr-dot">·</span><span>${sigBars(d.rssi)}${esc(d.rssi)} dBm</span>`
+    : '';
+
+  let btn;
+  if (d._pending) {
+    btn = '<button class="btn-pending" disabled><span class="spinner">↻</span></button>';
+  } else if (d.blocked) {
+    btn = `<button class="btn-unblock" data-mac="${esc(d.mac)}" data-name="${esc(d.name||d.mac)}" data-op="unblock">Unblock</button>`;
+  } else {
+    btn = `<button class="btn-block" data-mac="${esc(d.mac)}" data-name="${esc(d.name||d.mac)}" data-op="block">Block</button>`;
+  }
+
+  return `
+<div class="device-card ${stateClass}${blockedClass}${pendingClass}">
+  <div class="card-stripe"></div>
+  <div class="card-body">
+    <div class="card-top">
+      <span class="status-pill"><span class="status-dot"></span>${d.online ? 'Online' : 'Offline'}</span>
+      <div class="card-badges">${blockedBadge}${connBadge}</div>
+    </div>
+    <div class="device-name">${name}</div>
+    ${vendor}
+    <div class="card-addrs">
+      <span>${mac}</span>
+      <span class="addr-dot">·</span>
+      <span>${privacyMode ? maskIP(d.ip) : esc(d.ip)}</span>
+      ${rssiPart}
+    </div>
+  </div>
+  <div class="card-footer">${btn}</div>
+</div>`.trim();
+}
+
+function render() {
+  updateStats();
+  const list = visibleDevices();
+  const grid = document.getElementById('grid');
+  if (list.length === 0) {
+    grid.innerHTML = '<div class="empty-state">No devices match</div>';
+    return;
+  }
+  grid.innerHTML = list.map(renderCard).join('');
+  attachListeners();
+}
+
+// ── Block / Unblock ───────────────────────────────────────
+function attachListeners() {
+  document.getElementById('grid').querySelectorAll('button[data-op]').forEach(btn => {
+    btn.addEventListener('click', () => action(btn.dataset.mac, btn.dataset.op, btn.dataset.name));
+  });
+}
+
+async function action(mac, op, name) {
+  const label = op === 'block' ? 'Block' : 'Unblock';
+  if (!confirm(`${label} ${name || mac}?`)) return;
+
+  const idx = devices.findIndex(d => d.mac === mac);
+  const prev = devices[idx].blocked;
+  devices[idx] = { ...devices[idx], blocked: op === 'block', _pending: true };
+  render();
+
+  try {
+    const res = await fetch(`/api/devices/${encodeURIComponent(mac)}/${op}`, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || res.statusText);
+    }
+    devices[idx] = { ...devices[idx], _pending: false };
+    render();
+    hideError();
+  } catch(e) {
+    devices[idx] = { ...devices[idx], blocked: prev, _pending: false };
+    render();
+    showError(e.message);
+  }
+}
+
+// Hydrate SSR-rendered buttons on first load.
+attachListeners();
+</script>
+{{end}}
