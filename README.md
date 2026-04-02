@@ -2,6 +2,8 @@
 
 Home network dashboard for the ASUS RT-AX1800S. Shows all connected devices and lets you block or unblock internet access per device. Comes as a web dashboard (`whoson-server`) and a CLI (`whoson-cli`).
 
+![example](example.png)
+
 I built this because I was paranoid about some IoT devices on my network having persistent network egress.
 One day I'll figure out real (non-cloud) networking and implement some VPC-like stuff to manage this.
 
