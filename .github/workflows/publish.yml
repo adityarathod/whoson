@@ -23,7 +23,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download OUI DB
-        run: curl -fsSL -o ouiDB.json https://nw-dlcdnet.asus.com/plugin/js/ouiDB.json
+        run: curl -fsSLk -o ouiDB.json https://nw-dlcdnet.asus.com/plugin/js/ouiDB.json
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
