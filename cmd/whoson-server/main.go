@@ -16,7 +16,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const routerURL = "http://192.168.50.1"
+const defaultRouterURL = "http://192.168.50.1"
 
 //go:embed templates/*.html
 var templateFS embed.FS
@@ -44,13 +44,14 @@ type deviceSummary struct {
 }
 
 type server struct {
-	username string
-	password string
-	db       oui.DB
+	username  string
+	password  string
+	routerURL string
+	db        oui.DB
 }
 
 func (s *server) newSession() (*router.Client, error) {
-	r := router.New(routerURL)
+	r := router.New(s.routerURL)
 	if err := r.Login(s.username, s.password); err != nil {
 		return nil, fmt.Errorf("login: %w", err)
 	}
@@ -224,8 +225,10 @@ func (s *server) handleUnblock(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Printf("note: could not load .env: %v", err)
+	if _, err := os.Stat(".env"); err == nil {
+		if err := godotenv.Load(); err != nil {
+			log.Printf("note: could not load .env: %v", err)
+		}
 	}
 
 	username := os.Getenv("R_USER")
@@ -247,7 +250,12 @@ func main() {
 		}
 	}
 
-	s := &server{username: username, password: password, db: db}
+	routerURL := os.Getenv("ROUTER_URL")
+	if routerURL == "" {
+		routerURL = defaultRouterURL
+	}
+
+	s := &server{username: username, password: password, routerURL: routerURL, db: db}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
