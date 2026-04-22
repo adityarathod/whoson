@@ -15,10 +15,22 @@ One day I'll figure out real (non-cloud) networking and implement some VPC-like 
 ## Build
 
 ```sh
-make
+just
 ```
 
-Binaries are written to `bin/`.
+Binaries are written to `bin/`. You can also build individually:
+
+```sh
+just whoson-cli
+just whoson-server
+```
+
+Or with `go build` directly:
+
+```sh
+go build -o bin/whoson-cli ./cmd/whoson-cli
+go build -o bin/whoson-server ./cmd/whoson-server
+```
 
 ## Configuration
 
@@ -30,7 +42,40 @@ R_PASSWORD=yourpassword
 OUI_DB=./testdata/ouiDB.json   # optional, improves vendor lookup
 ```
 
-The server also respects `LISTEN_ADDR` (default `:8080`).
+The server also respects `ROUTER_URL` (default `http://192.168.50.1`), `LISTEN_ADDR` (default `:8080`), and `OUI_DB`.
+
+## Container
+
+Pre-built images are published to GHCR on every push to `main` and on version tags:
+
+```sh
+docker run -p 8080:8080 \
+  -e R_USER=admin \
+  -e R_PASSWORD=yourpassword \
+  ghcr.io/adityarathod/whoson/whoson-server:main
+```
+
+Use a version tag to pin to a release:
+
+```sh
+ghcr.io/adityarathod/whoson/whoson-server:1.2.3
+```
+
+To cut a new release, push a `v`-prefixed tag:
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+This triggers the publish workflow and produces `1.2.3` and `1.2` image tags automatically.
+
+To build and run locally instead:
+
+```sh
+just image
+just image-run
+```
 
 ## whoson-server
 

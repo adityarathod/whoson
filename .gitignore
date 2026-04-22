@@ -4,3 +4,4 @@ bin/
 testdata/
 /internal-docs
 .claude/
+/ouiDB.json
